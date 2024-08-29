@@ -81,13 +81,11 @@ class LocalStudent(nn.Module):
     
         
 class AutoEncoder(nn.Module):
-    def __init__(self, out_size=64,out_dim=512,base_dim=64,input_size=256,padding=True):
+    def __init__(self, out_size=64,out_dim=512,base_dim=64):
         super(AutoEncoder, self).__init__()
         self.out_dim = out_dim
         self.base_dim = base_dim
-        self.input_size = input_size
         self.out_size = out_size
-        self.padding = padding
 
         self.enconv1 = nn.Conv2d(3, self.base_dim//2, kernel_size=4, stride=2, padding=1)
         self.enconv2 = nn.Conv2d(self.base_dim//2, self.base_dim//2, kernel_size=4, stride=2, padding=1)

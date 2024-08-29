@@ -173,7 +173,7 @@ class CSAD:
         self.student = LocalStudent(
             out_dim=512,feat_size=64,padding=True
         )
-        self.autoencoder = AutoEncoder(out_size=64,out_dim=512,base_dim=64,input_size=256)
+        self.autoencoder = AutoEncoder(out_size=64,out_dim=512,base_dim=64)
         self.teacher = ResNetTeacher(
             out_dim=512,
             feat_size=64,
