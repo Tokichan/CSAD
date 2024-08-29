@@ -1,6 +1,6 @@
 # CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection
  [![arXiv](https://img.shields.io/badge/arXiv-2408.15628-b31b1b.svg)](https://arxiv.org/abs/2408.15628) 
-
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/csad-unsupervised-component-segmentation-for/anomaly-detection-on-mvtec-loco-ad)](https://paperswithcode.com/sota/anomaly-detection-on-mvtec-loco-ad?p=csad-unsupervised-component-segmentation-for)
 
 
 This is the official implementation of the paper "CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection" accepted by BMVC 2024.
