@@ -1,0 +1,27 @@
+Datasets:
+  train:
+    root: datasets/mvtec_loco_anomaly_detection/
+    type: mvtec_loco
+  eval:
+    root: datasets/mvtec_loco_anomaly_detection/
+    type: mvtec_loco
+
+output_dir: output
+
+Model:
+  channel_size: 512
+  input_size: 256
+  iterations: 60000
+  loss_weights:
+    st: 1.0
+    ae: 1.0
+    stae: 1.0
+  padding: True
+  batch_size: 2
+
+  
+eval_freq: 1000
+normalized_ratio: 0.1
+combined_mst_ratio: 0.5
+combined_mae_ratio: 0.5
+ckpt_dir: ckpt

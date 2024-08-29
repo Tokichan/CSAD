@@ -1,0 +1,29 @@
+category: "screw_bag"
+train_image_path: "PROJECT_ROOT/datasets/mvtec_loco_anomaly_detection/category/train/good/*.png"
+test_image_path: "PROJECT_ROOT/datasets/mvtec_loco_anomaly_detection/category/test/*/*.png"
+val_image_path: "PROJECT_ROOT/datasets/mvtec_loco_anomaly_detection/category/validation/*/*.png"
+mask_root: "PROJECT_ROOT/datasets/masks/category"
+model_path: "PROJECT_ROOT/ckpt/segmentor_category.pth"
+fill_holes: False
+in_dim: [256,1024]
+orig_image_size: [1100,1600]
+load: False
+image_size: 256
+lr: 0.01
+epoch: 120 
+sup_only_epoch: 50
+LSA_ratio: 1.0
+
+loss_weight: 
+    ce: 0.5
+    focal: 10
+    dice: 1
+    hist: 10
+    entropy: 1
+
+LSA_config: 
+    min_distance: 0.1
+    max_aug_num: 2
+    min_aug_num: 1
+    boundary: 0.1
+    weight_power: 0.0

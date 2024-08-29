@@ -1,0 +1,6 @@
+/datasets
+/anomaly_score
+/ckpt
+/results
+/output
+*.pyc

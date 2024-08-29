@@ -1,0 +1,33 @@
+
+category: "screw_bag" #"juice_bottle"#"splicing_connectors" #"breakfast_box" #"screw_bag"
+histogram_type: "area"
+image_size: 256
+feature_list: ["cnn_image"]
+max_hyper: 3.0
+no_cluster: False
+reduce_dim: True
+proj_dim: 512
+filter_hist: True
+  
+use_grounding_filter: True
+no_sam: False
+grounding_config: 
+  box_threshold: 0.3
+  text_threshold: 0.3
+  text_prompt: "metal bolts. metal hex nuts. metal washers. metal screws. zip-lock bag. screw. ring. metal circle. bag. bolt. container. nut. package. plastic. screw. tool."
+  background_prompt: "zip-lock bag"
+
+sam_config:
+  points_per_side: 32
+  points_per_batch: 16
+  pred_iou_thresh: 0.88
+  stability_score_thresh: 0.96 #0.97
+  stability_score_offset: 1.0
+  box_nms_thresh: 0.7
+  crop_n_layers: 1
+  crop_nms_thresh: 0.7
+  crop_overlap_ratio: 512 / 1500
+  crop_n_points_downscale_factor: 1
+  point_grids: None
+  min_mask_region_area: 500
+  output_mode: "binary_mask"
