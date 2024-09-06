@@ -3,4 +3,5 @@
 /ckpt
 /results
 /output
+/.vscode
 *.pyc

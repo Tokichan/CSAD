@@ -58,9 +58,10 @@ class FixedPatchClassDetector():
         (Predefined patch sizes and overlap ratios)
         (not using EMPatches to extract patches)
     """
-    def __init__(self,num_classes=5,segmap_size=256):
+    def __init__(self,num_classes=5,segmap_size=256,use_nahalanobis=False):
         self.num_classes = num_classes
         self.segmap_size = segmap_size
+        self.use_nahalanobis = use_nahalanobis
         self.hist_mean = torch.randn((self.num_classes)).cuda()
         self.hist_invcov = torch.randn((self.num_classes,self.num_classes)).cuda()
         self.patch_hist_mean = torch.randn((self.num_classes*4)).cuda()
@@ -79,8 +80,12 @@ class FixedPatchClassDetector():
         diff_hists = []
         diff_patchhists = []
         for i in range(segmap.shape[0]):
-            diff_hist = torch.matmul(torch.matmul(hist[i]-self.hist_mean,self.hist_invcov),hist[i]-self.hist_mean)**0.5
-            diff_patchhist = torch.matmul(torch.matmul(patch_hist[i]-self.patch_hist_mean,self.patch_hist_invcov),patch_hist[i]-self.patch_hist_mean)**0.5
+            if self.use_nahalanobis:
+                diff_hist = torch.matmul(torch.matmul(hist[i]-self.hist_mean,self.hist_invcov),hist[i]-self.hist_mean)**0.5
+                diff_patchhist = torch.matmul(torch.matmul(patch_hist[i]-self.patch_hist_mean,self.patch_hist_invcov),patch_hist[i]-self.patch_hist_mean)**0.5
+            else:
+                diff_hist = ((hist[i]-self.hist_mean)**2).sum()**0.5
+                diff_patchhist = ((patch_hist[i]-self.patch_hist_mean)**2).sum()**0.5
             diff_hists.append(diff_hist)
             diff_patchhists.append(diff_patchhist)
         diff_hist = torch.stack(diff_hists)

@@ -23,6 +23,7 @@ efficientnet-pytorch==0.7.1
 einops==0.7.0
 empatches==0.2.3
 faiss==1.8.0
+fastjsonschema==2.17.1
 filelock==3.9.0
 flatbuffers==24.3.25
 fonttools==4.49.0
@@ -62,21 +63,25 @@ mkl-service==2.4.0
 mpmath==1.3.0
 multidict==6.0.5
 multiprocess==0.70.16
-networkx==3.2.1
+networkx==3.1
 ninja==1.11.1.1
 numba==0.59.1
-numpy @ file:///C:/b/abs_c1ywpu18ar/croot/numpy_and_numpy_base_1708638681471/work/dist/numpy-1.26.4-cp39-cp39-win_amd64.whl#sha256=f284633067fde4bb078a09085a1c9e99a3218c129f5312b7b3d76c9340442a25
+numpy==1.25.2
 omegaconf==2.3.0
-onnx @ file:///C:/b/abs_315n8rxfrc/croot/onnx_1714088128519/work
+onnx==1.15.0
+onnxconverter-common==1.14.0
 onnxruntime-gpu==1.18.0
 opencv-python==4.9.0.80
 opencv-python-headless==4.9.0.80
+openvino==2024.3.0
+openvino-dev==2024.3.0
+openvino-telemetry==2024.1.0
 packaging @ file:///C:/b/abs_cc1h2xfosn/croot/packaging_1710807447479/work
 pandas==2.2.1
 pillow==10.2.0
 platformdirs==4.2.0
 portalocker==2.10.1
-protobuf @ file:///D:/bld/protobuf_1681050122068/work/python
+protobuf==3.20.2
 pyarrow==15.0.0
 pyarrow-hotfix==0.6
 pycocotools==2.0.7

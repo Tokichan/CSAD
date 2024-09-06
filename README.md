@@ -50,19 +50,22 @@ Model will be saved in the `ckpt/best_{category}.pth`, anomaly scores will be sa
 
 ## Evaluation
 
-| Total Average AUROC | Paper |Pretrained Weight |
-|-|-|-|
-| MVTec LOCO AD | 95.3| 95.6 |   
+| Total Average AUROC | MVTec LOCO AD  | 
+|-|-|
+| Paper | 95.3 |   
+| pytorch | 95.593 |
+|ONNX| 95.596|
+|OpenVINO| 95.601|
 
 ### 1. Evaluate pretrained models
-Download the pretrained model in ONNX format from [Google drive](https://drive.google.com/file/d/1Z4ZDs03JvU8kx1QQ9aNdWhBTP0jwEVcy/view?usp=sharing) and run:
+Download the pretrained Pytorch model from [Google drive](https://drive.google.com/file/d/1ZvzjT62hOqFNkEPAHpREk0mVe7DviXAF/view?usp=sharing), extract files into `ckpt/pytorch_models` and run:
 
 ```
-python export_model.py --only_inference
+python export_model.py --inference_only --format torch
 ```
 The detection result will show in the cmd.
 
-### 2. Evaluate and export model to ONNX format
+### 2. Export modules to Pytorch model
 Make sure you have the following files:
 
 ```
@@ -75,13 +78,47 @@ anomaly_score/{category}_patchhist_val_score.npy
 
 and run
 ```
-python export_model.py
+python export_model.py --format torch
 ```
-to convert all module into a single ONNX model stored in `ckpt/onnx_models/{category}.onnx`.
-The test result of detection AUROC will be printed on the cmd.
+to convert all module into a single Pytorch model stored in `ckpt/pytorch_models/{category}.pth`.
+
+### 3. Convert Pytorch model to ONNX format
+Make sure you have the following files:
+
+```
+ckpt/pytorch_models/{category}.pth
+```
+
+and run
+```
+python export_model.py --format onnx
+```
+to convert pytorch model to ONNX model stored in `ckpt/onnx_models/{category}.onnx`.
+
+### 3. Convert ONNX model to OpenVINO format
+Make sure you have the following files:
+
+```
+ckpt/onnx_models/{category}.onnx
+```
+
+and run
+```
+python export_model.py --format openvino
+```
+to convert ONNX model to OpenVINO model stored in `ckpt/openvino_models/{category}.bin` and `ckpt/openvino_models/{category}.xml`.
+
+### 4. Evaluate in ONNX or OpenVINO format
+After obtaining the ONNX or OpenVINO model, tou can evaluate them with
+```
+python export_model.py --inference_only --format onnx
+or
+python export_model.py --inference_only --format openvino
+```
+The detection result will show in the cmd.
 
 
-### 3. Alternative way to evaluate model
+### 5. Alternative way to evaluate model
 After training all modules, make sure you have the following files:
 
 ```

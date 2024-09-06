@@ -28,7 +28,7 @@ def InfiniteDataloader(loader):
 
 class MVTecLOCODataset(Dataset):
 
-    def __init__(self, root, image_size, phase,category,use_pad=True,config=None):
+    def __init__(self, root, image_size, phase,category,use_pad=True,to_gpu=True,config=None):
         self.phase=phase
         self.category = category
         self.image_size = image_size
@@ -49,10 +49,10 @@ class MVTecLOCODataset(Dataset):
             self.gt_path = os.path.join(root,category, 'ground_truth')
         assert os.path.isdir(os.path.join(root,category)), 'Error MVTecLOCODataset category:{}'.format(category)
 
-        self.img_paths, self.gt_paths, self.labels, self.types = self.load_dataset() # self.labels => good : 0, anomaly : 1
+        self.img_paths, self.gt_paths, self.labels, self.types = self.load_paths() # self.labels => good : 0, anomaly : 1
         
         # load dataset
-        self.load_to_gpu()
+        self.load_images(to_gpu=to_gpu)
 
     def build_transform(self):
         self.norm_transform = transforms.Compose([
@@ -75,7 +75,7 @@ class MVTecLOCODataset(Dataset):
 
         
 
-    def load_dataset(self):
+    def load_paths(self):
 
         img_tot_paths = []
         gt_tot_paths = []
@@ -113,7 +113,7 @@ class MVTecLOCODataset(Dataset):
     def __len__(self):
         return len(self.img_paths)
     
-    def load_to_gpu(self):
+    def load_images(self,to_gpu=True):
         
         self.pad_func, self.pad2resize = get_padding_functions(
             Image.open(self.img_paths[0]).size,
@@ -132,10 +132,12 @@ class MVTecLOCODataset(Dataset):
             resize_img = self.resize_norm_transform(img)
             pad_img = self.norm_transform(self.pad_func(img))
             
-
+            if to_gpu:
+                resize_img = resize_img.cuda()
+                pad_img = pad_img.cuda()
             self.samples.append({
-                'image': resize_img.cuda(),
-                'pad_image': pad_img.cuda(),
+                'image': resize_img,
+                'pad_image': pad_img,
                 'label': label,
                 'name': os.path.basename(img_path[:-4]),
                 'type': img_type,
