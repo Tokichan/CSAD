@@ -55,12 +55,12 @@ class SegmentorTrainer():
               [128, 0, 0], [128, 128, 0], [0, 128, 0],
               [128, 0, 128], [0, 128, 128], [0, 0, 128]]
         
-    def fit(self,sup_dataloader,unsup_dataloader,val_dataloaader,test_dataloader,full_train_dataloader):
+    def fit(self,sup_dataloader,unsup_dataloader,val_dataloader,test_dataloader,full_train_dataloader):
         # training
         
 
-        self.optimizer = torch.optim.Adam(self.segmentor.parameters(),lr=self.config["lr"],weight_decay=1e-4)
-        self.ce_loss = MulticlassCrossEntropyLoss(ignore_index=None)#nn.CrossEntropyLoss()
+        self.optimizer = torch.optim.Adam(self.segmentor.parameters(),lr=self.config["lr"],weight_decay=1e-5)
+        self.ce_loss = MulticlassCrossEntropyLoss(ignore_index=None)
         self.focal_loss = FocalLoss(ignore_index=None)
         # self.dice_loss = MulticlassDiceLoss()
         self.dice_loss = ClassBalancedDiceLoss(ignore_index=None)
@@ -95,10 +95,10 @@ class SegmentorTrainer():
                     self.segmentor.eval()
                     self.test(test_dataloader)
                     
-                    # logi_auc, struc_auc = self.test_hist_mahalanobis(self.segmentor,full_train_dataloader,val_dataloaader,test_dataloader,num_classes=self.num_classes)
+                    # logi_auc, struc_auc = self.test_hist_mahalanobis(self.segmentor,full_train_dataloader,val_dataloader,test_dataloader,num_classes=self.num_classes)
                     logi_auc, struc_auc = test_patch_histogram(
                         train_loader=full_train_dataloader,
-                        val_loader=val_dataloaader,
+                        val_loader=val_dataloader,
                         test_loader=test_dataloader,
                         encoder=self.encoder,
                         segmentor=self.segmentor,
@@ -131,7 +131,7 @@ class SegmentorTrainer():
                         # store anomaly score
                         logi_auc, struc_auc = test_patch_histogram(
                             train_loader=full_train_dataloader,
-                            val_loader=val_dataloaader,
+                            val_loader=val_dataloader,
                             test_loader=test_dataloader,
                             encoder=self.encoder,
                             segmentor=self.segmentor,

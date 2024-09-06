@@ -49,15 +49,58 @@ python CSAD.py
 Model will be saved in the `ckpt/best_{category}.pth`, anomaly scores will be saved in `anomaly_score/{category}_CSAD_logi_score.npy`, `anomaly_score/{category}_CSAD_struc_score.npy` and `anomaly_score/{category}_CSAD_val_score.npy`.
 
 ## Evaluation
-After all above steps, run 
+
+| Total Average AUROC | Paper |Pretrained Weight |
+|-|-|-|
+| MVTec LOCO AD | 95.3| 95.6 |   
+
+### 1. Evaluate pretrained models
+Download the pretrained model in ONNX format from [Google drive](https://drive.google.com/file/d/1Z4ZDs03JvU8kx1QQ9aNdWhBTP0jwEVcy/view?usp=sharing) and run:
+
+```
+python export_model.py --only_inference
+```
+The detection result will show in the cmd.
+
+### 2. Evaluate and export model to ONNX format
+Make sure you have the following files:
+
+```
+ckpt/best_{category}.pth
+ckpt/segmentor_{category}_256.pth
+anomaly_score/{category}_patchhist_params.npz
+anomaly_score/{category}_LGST_val_score.npy
+anomaly_score/{category}_patchhist_val_score.npy
+```
+
+and run
+```
+python export_model.py
+```
+to convert all module into a single ONNX model stored in `ckpt/onnx_models/{category}.onnx`.
+The test result of detection AUROC will be printed on the cmd.
+
+
+### 3. Alternative way to evaluate model
+After training all modules, make sure you have the following files:
+
+```
+anomaly_score/{category}_patchhist_logi_score.npy
+anomaly_score/{category}_patchhist_struc_score.npy
+anomaly_score/{category}_patchhist_val_score.npy
+anomaly_score/{category}_LGST_logi_score.npy
+anomaly_score/{category}_LGST_struc_score.npy
+anomaly_score/{category}_LGST_val_score.npy
+```
+
+and run 
 ```
 python benchmark_performance.py
 ```
 and the test results are stored in `score_combine_result.txt`, given in seperated or combined setting.
 
 ### Notes
-1. Either padding or resize the image in training and testing the component segmentation network produce similar detection result, we choose padding in this repo.
-2. Similar to EfficientAD, we enable padding in both local and global students while disabling them in the speed testing section, for both settings produce similar detection result.
+1. Similar to EfficientAD, we enable padding in both local and global students while disabling them in the speed testing section, for both settings produce similar detection result.
 
 # Acknowledgments
 We adopt some of the code from [EfficientAD](https://github.com/nelson1425/EfficientAD/tree/main), [anomalib](https://github.com/openvinotoolkit/anomalib) and [Grounded-SAM](https://github.com/IDEA-Research/Grounded-Segment-Anything/tree/main), thanks for their great work.

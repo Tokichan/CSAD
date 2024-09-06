@@ -60,7 +60,7 @@ class MVTecLOCODataset(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         self.resize_norm_transform = transforms.Compose([
-            transforms.Resize((self.image_size,self.image_size)),
+            transforms.Resize((self.image_size,self.image_size),interpolation=Image.BILINEAR),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
@@ -115,8 +115,10 @@ class MVTecLOCODataset(Dataset):
     
     def load_to_gpu(self):
         
-        self.pad_func, self.pad2resize = get_padding_functions(Image.open(self.img_paths[0]).size,target_size=self.image_size)
-        self.pad_func_linear, self.pad2resize_linear = get_padding_functions(Image.open(self.img_paths[0]).size,target_size=self.image_size,mode='bilinear')
+        self.pad_func, self.pad2resize = get_padding_functions(
+            Image.open(self.img_paths[0]).size,
+            target_size=self.image_size,
+            mode='bilinear')
         
         self.samples = list()
         self.images = list()

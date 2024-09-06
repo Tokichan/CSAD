@@ -103,7 +103,7 @@ def get_padding_functions(orig_size,target_size=256,resize_target_size=None,mode
         pad_t = pad_b = (target_size - new_h) // 2
     else:
         pad_t,pad_b = (target_size - new_h) // 2,(target_size - new_h) // 2 + 1
-    inter =  transforms.InterpolationMode.NEAREST if mode == 'nearest' else transforms.InterpolationMode.BILINEAR
+    inter =  Image.NEAREST if mode == 'nearest' else Image.BILINEAR
 
     padding_func = transforms.Compose([
         transforms.Resize((new_h,new_w),interpolation=inter),
@@ -112,9 +112,10 @@ def get_padding_functions(orig_size,target_size=256,resize_target_size=None,mode
     return padding_func, Padding2Resize(pad_l,pad_t,pad_r,pad_b)
 
 class SegmentDataset(Dataset):
-    def __init__(self,image_path,mask_root,sup=True,image_size=256,use_padding=True):
+    def __init__(self,image_path,mask_root,sup=True,image_size=256,use_padding=False,config=None):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.config = config
         self.use_padding = use_padding
         self.sup = sup
         # print(f"Building {'supervise' if sup else 'unsupervise'} dataset...")
@@ -132,11 +133,13 @@ class SegmentDataset(Dataset):
 
         self.image_dataset = self.image_paths
         self.padding_func, self.pad2resize = get_padding_functions(Image.open(self.image_dataset[0]).size,target_size=image_size)
-        self.background_padding_func, self.background_inverse_padding_func = get_padding_functions(Image.open(self.background_paths[0]).size,target_size=image_size,fill=255)
+        self.background_padding_func, self.background_pad2resize = get_padding_functions(Image.open(self.background_paths[0]).size,target_size=image_size,fill=255)
         
         if not self.use_padding:
             # use resize
-            self.padding_func = transforms.Resize((image_size,image_size),interpolation=Image.BILINEAR)
+            self.padding_func_nearest = transforms.Resize((image_size,image_size),interpolation=Image.NEAREST)
+            self.padding_func_linear = transforms.Resize((image_size,image_size),interpolation=Image.BILINEAR)
+            
             self.background_padding_func = transforms.Resize((image_size,image_size),interpolation=Image.NEAREST)
         
         self.good_indices = np.sort(np.load(self.info_path+"filtered_histogram_indices.npy")).tolist()
@@ -158,14 +161,14 @@ class SegmentDataset(Dataset):
         self.transform = self.create_transform()
         
         for i, image_path in tqdm.tqdm(list(enumerate(self.image_paths)),desc=f'loading {"sup" if sup else "unsup"} datas...'):
-            image = self.padding_func(Image.open(image_path).convert("RGB"))
+            image = self.padding_func_linear(Image.open(image_path).convert("RGB"))
             if self.config['fill_holes']:
                 gt = np.array(Image.open(self.gt_paths[i]).convert("L"))
                 gt = split_masks_from_one_mask(gt)
                 gt = merge_masks([binary_fill_holes(mask) if self.config['fill_holes'] else mask for mask in gt])
-                gt = self.padding_func(Image.fromarray(gt))
+                gt = self.padding_func_nearest(Image.fromarray(gt))
             else:
-                gt = self.padding_func(Image.open(self.gt_paths[i]).convert("L"))
+                gt = self.padding_func_nearest(Image.open(self.gt_paths[i]).convert("L"))
             self.image_dataset.append(np.array(image))
             self.gt_dataset.append(np.array(gt))
             
@@ -177,7 +180,7 @@ class SegmentDataset(Dataset):
             self.lsa_backgrounds = [np.array(self.background_padding_func(Image.open(image_path).convert("L"))) for i,image_path in enumerate(self.background_paths) if i in self.good_indices]
             # self.lsa_labels = [np.array(padding_func(Image.open(image_path).convert("L"))) for i,image_path in enumerate(self.gt_paths) if i in self.good_indices]
             self.lsa_labels =  self.gt_dataset
-            self.lsa_masks = [np.array(self.padding_func(Image.open(image_path).convert("L"))) for i,image_path in  enumerate(self.segment_paths) if i in self.good_indices]
+            self.lsa_masks = [np.array(self.padding_func_nearest(Image.open(image_path).convert("L"))) for i,image_path in  enumerate(self.segment_paths) if i in self.good_indices]
             self.lsa_ratio = self.config['LSA_ratio']
             self.lsa = LabeledLSA(
                 self.lsa_images,
@@ -199,12 +202,12 @@ class SegmentDataset(Dataset):
                 border_mode=cv2.BORDER_CONSTANT,
                 value=0,
                 mask_value=0,
-                p=1.0
+                p=0.5
             ),
             A.RandomBrightnessContrast(
                 brightness_limit=0.05,
                 contrast_limit=0.05,
-                p=1.0
+                p=0.5
             ),
         ])
     
@@ -245,7 +248,7 @@ class SegmentDataset(Dataset):
     
     
 class SegmentDatasetTest(Dataset):
-    def __init__(self,image_path,image_size=256):
+    def __init__(self,image_path,image_size=256,use_padding=False):
         super().__init__()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         transform = transforms.Compose([
@@ -254,8 +257,10 @@ class SegmentDatasetTest(Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         self.image_paths = glob.glob(image_path)
-
-        padding_func, inverse_padding_func = get_padding_functions(Image.open(self.image_paths[0]).size,target_size=image_size)
+        if use_padding:
+            padding_func = get_padding_functions(Image.open(self.image_paths[0]).size,target_size=image_size)
+        else:
+            padding_func = transforms.Resize((image_size,image_size),interpolation=Image.BILINEAR)
         self.image_dataset = [transform(padding_func(Image.open(image_path).convert("RGB"))).to(self.device) for image_path in tqdm.tqdm(self.image_paths,desc='loading images...')]
         
 
