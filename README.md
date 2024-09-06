@@ -50,7 +50,8 @@ Model will be saved in the `ckpt/best_{category}.pth`, anomaly scores will be sa
 
 ## Evaluation
 
-| Total Average AUROC | MVTec LOCO AD  | 
+Detection results of MVTec LOCO AD:
+| Source | Total Average AUROC  | 
 |-|-|
 | Paper | 95.3 |   
 | pytorch | 95.593 |
