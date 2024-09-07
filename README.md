@@ -110,7 +110,7 @@ python export_model.py --format openvino
 to convert ONNX model to OpenVINO model stored in `ckpt/openvino_models/{category}.bin` and `ckpt/openvino_models/{category}.xml`.
 
 ### 4. Evaluate in ONNX or OpenVINO format
-After obtaining the ONNX or OpenVINO model, tou can evaluate them with
+After obtaining the ONNX or OpenVINO model, you can evaluate them with
 ```
 python export_model.py --inference_only --format onnx
 or
