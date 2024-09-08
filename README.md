@@ -96,7 +96,7 @@ python export_model.py --format onnx
 ```
 to convert pytorch model to ONNX model stored in `ckpt/onnx_models/{category}.onnx`.
 
-### 3. Convert ONNX model to OpenVINO format
+### 4. Convert ONNX model to OpenVINO format
 Make sure you have the following files:
 
 ```
@@ -109,7 +109,7 @@ python export_model.py --format openvino
 ```
 to convert ONNX model to OpenVINO model stored in `ckpt/openvino_models/{category}.bin` and `ckpt/openvino_models/{category}.xml`.
 
-### 4. Evaluate in ONNX or OpenVINO format
+### 5. Evaluate in ONNX or OpenVINO format
 After obtaining the ONNX or OpenVINO model, you can evaluate them with
 ```
 python export_model.py --inference_only --format onnx
@@ -119,7 +119,7 @@ python export_model.py --inference_only --format openvino
 The detection result will show in the cmd.
 
 
-### 5. Alternative way to evaluate model
+### 6. Alternative way to evaluate model
 After training all modules, make sure you have the following files:
 
 ```
