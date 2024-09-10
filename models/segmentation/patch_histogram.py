@@ -50,7 +50,7 @@ class PatchClassDetector():
 def histogram(label_map,num_classes):
     hist = np.zeros(num_classes)
     for i in range(1,num_classes): # not include background
-        hist[i-1] = (label_map == i).sum()
+        hist[i] = (label_map == i).sum()
     hist = hist / label_map.size
     return hist 
     

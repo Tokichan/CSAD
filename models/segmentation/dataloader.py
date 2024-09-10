@@ -9,7 +9,6 @@ import tqdm
 from torchvision import transforms
 import glob
 from scipy.ndimage import binary_fill_holes
-from rich.progress import track
 from models.segmentation.lsa import LabeledLSA
 import albumentations as A
 

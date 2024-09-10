@@ -9,7 +9,7 @@ This is the official implementation of the paper "CSAD: Unsupervised Component S
 
 
 ## Setup
-We use python==3.9 with pytorch==2.2.0(cuda12.1)
+We use python==3.10 with pytorch==2.4.1(cuda12.1)
 
 To install HQ-SAM, follow the instruction in https://github.com/SysCV/sam-hq and download the checkpoint into `ckpt/`.
 
@@ -54,9 +54,9 @@ Detection results of MVTec LOCO AD:
 | Source | Total Average AUROC  | 
 |-|-|
 | Paper | 95.3 |   
-| pytorch | 95.593 |
-|ONNX| 95.596|
-|OpenVINO| 95.601|
+| pytorch | 95.506 |
+|ONNX| 95.506 |
+|OpenVINO| 95.508 |
 
 ### 1. Evaluate pretrained models
 Download the pretrained Pytorch model from [Google drive](https://drive.google.com/file/d/1ZvzjT62hOqFNkEPAHpREk0mVe7DviXAF/view?usp=sharing), extract files into `ckpt/pytorch_models` and run:

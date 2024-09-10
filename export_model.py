@@ -6,13 +6,15 @@ import timm
 import numpy as np
 from torch.utils.data import DataLoader
 from sklearn.metrics import roc_auc_score
+from models.model import LocalStudent, AutoEncoder
+from models.segmentation.model import Segmentor
 import os
 import tqdm
 import argparse
 
 from data_loader import MVTecLOCODataset
 
-class FixedPatchClassDetector():
+class FixedPatchClassDetector(nn.Module):
     """
         Optimized version of patch histogram detector for fast speed
         and support batched input.
@@ -20,38 +22,62 @@ class FixedPatchClassDetector():
         (not using EMPatches to extract patches)
     """
     def __init__(self,num_classes=5,segmap_size=256,use_nahalanobis=False):
+        super(FixedPatchClassDetector, self).__init__()
         self.num_classes = num_classes
         self.segmap_size = segmap_size
-        self.use_nahalanobis = use_nahalanobis
-        self.hist_mean = torch.randn((self.num_classes)).cuda()
-        self.hist_invcov = torch.randn((self.num_classes,self.num_classes)).cuda()
-        self.patch_hist_mean = torch.randn((self.num_classes*4)).cuda()
-        self.patch_hist_invcov = torch.randn((self.num_classes*4,self.num_classes*4)).cuda()
-        self.hist_val_mean = torch.randn((1)).cuda()
-        self.hist_val_std = torch.randn((1)).cuda()
-        self.patch_hist_val_mean = torch.randn((1)).cuda()
-        self.patch_hist_val_std = torch.randn((1)).cuda()
+        
+        self.use_nahalanobis = use_nahalanobis if (self.num_classes-1) > 1 else False
 
+        self.hist_mean = torch.nn.Parameter(data=torch.randn((self.num_classes)),requires_grad=False)
+        self.hist_invcov = torch.nn.Parameter(data=torch.randn((self.num_classes,self.num_classes)),requires_grad=False)
+        self.patch_hist_mean = torch.nn.Parameter(data=torch.randn((self.num_classes*4)),requires_grad=False)
+        self.patch_hist_invcov = torch.nn.Parameter(data=torch.randn((self.num_classes*4,self.num_classes*4)),requires_grad=False)
+        self.hist_val_mean = torch.nn.Parameter(data=torch.randn(1)[0],requires_grad=False)
+        self.hist_val_std = torch.nn.Parameter(data=torch.randn(1)[0],requires_grad=False)
+        self.patch_hist_val_mean = torch.nn.Parameter(data=torch.randn(1)[0],requires_grad=False)
+        self.patch_hist_val_std = torch.nn.Parameter(data=torch.randn(1)[0],requires_grad=False)
+        
+
+    def set_params(self,params):
+        self.hist_mean = torch.nn.Parameter(data=params['hist_mean'],requires_grad=False)
+        self.hist_invcov = torch.nn.Parameter(data=params['hist_invcov'],requires_grad=False)
+        self.patch_hist_mean = torch.nn.Parameter(data=params['patch_hist_mean'],requires_grad=False)
+        self.patch_hist_invcov = torch.nn.Parameter(data=params['patch_hist_invcov'],requires_grad=False)
+        self.hist_val_mean = torch.nn.Parameter(data=params['hist_val_mean'],requires_grad=False)
+        self.hist_val_std = torch.nn.Parameter(data=params['hist_val_std'],requires_grad=False)
+        self.patch_hist_val_mean = torch.nn.Parameter(data=params['patch_hist_val_mean'],requires_grad=False)
+        self.patch_hist_val_std = torch.nn.Parameter(data=params['patch_hist_val_std'],requires_grad=False)
+
+
+    @staticmethod
+    def histogram(seg_map):
+        _, max_indices = torch.max(seg_map, dim=1)
+        # Create a tensor of zeros with the same shape as the input tensor
+        out = torch.zeros_like(seg_map)
+        # Set the max values to 1 by using advanced indexing
+        out.scatter_(1, max_indices.unsqueeze(1), 1)
+        hist = torch.mean(out,dim=[2,3])
+        return hist
     
-    def histogram(self,label_map,num_classes):
-        hist = torch.zeros(label_map.shape[0],num_classes).cuda()
-        for i in range(1,num_classes+1): # not include background
-            hist[:,i-1] = torch.sum((label_map == i),dim=[1,2])
-        hist = hist / (label_map.shape[1]*label_map.shape[2])
-        return hist 
-
-    def patch_histogram(self,label_map,num_classes):
+    @staticmethod
+    def patch_histogram(seg_map):
         # patch_size = 128
-        a = label_map[:,:128,:128]
-        b = label_map[:,128:,:128]
-        c = label_map[:,:128,128:]
-        d = label_map[:,128:,128:]
-        return torch.concat([self.histogram(a,num_classes),self.histogram(b,num_classes),self.histogram(c,num_classes),self.histogram(d,num_classes)],dim=1)
+        a = seg_map[:,:,:128,:128]
+        b = seg_map[:,:,128:,:128]
+        c = seg_map[:,:,:128,128:]
+        d = seg_map[:,:,128:,128:]
+        return torch.concat([
+            FixedPatchClassDetector.histogram(a),
+            FixedPatchClassDetector.histogram(b),
+            FixedPatchClassDetector.histogram(c),
+            FixedPatchClassDetector.histogram(d)]
+            ,dim=1)
 
 
-    def detect_grid(self,segmap):
-        hist = self.histogram(segmap,self.num_classes)
-        patch_hist = self.patch_histogram(segmap,self.num_classes)
+
+    def forward(self,segmap):
+        hist = FixedPatchClassDetector.histogram(segmap)
+        patch_hist = FixedPatchClassDetector.patch_histogram(segmap)
 
         diff_hists = []
         diff_patchhists = []
@@ -66,8 +92,14 @@ class FixedPatchClassDetector():
             diff_patchhists.append(diff_patchhist)
         diff_hist = torch.stack(diff_hists)
         diff_patchhist = torch.stack(diff_patchhists)
-        diff_hist = (diff_hist-self.hist_val_mean)/self.hist_val_std
-        diff_patchhist = (diff_patchhist-self.patch_hist_val_mean)/self.patch_hist_val_std
+        if self.hist_val_std > 1e-3:
+            diff_hist = (diff_hist-self.hist_val_mean)/self.hist_val_std
+        else:
+            diff_hist = diff_hist-self.hist_val_mean
+        if self.patch_hist_val_std > 1e-3:
+            diff_patchhist = (diff_patchhist-self.patch_hist_val_mean)/self.patch_hist_val_std
+        else:
+            diff_patchhist = diff_patchhist-self.patch_hist_val_mean
         return diff_hist+diff_patchhist
     
 # without encoder
@@ -92,29 +124,68 @@ class ResNetTeacher(nn.Module):
         return proj_feat
     
 class CSAD_ONNX(nn.Module):
-    def __init__(self,encoder,teacher,local_st,autoencoder,segmentor,patch_hist_detector,params):
+    def __init__(self,dim=512,num_classes=5):
         super(CSAD_ONNX, self).__init__()
-        self.teacher_mean = params['teacher_mean']
-        self.teacher_std = params['teacher_std']
+        self.teacher_mean = torch.nn.Parameter(data=torch.randn((1,dim,1,1)),requires_grad=False)
+        self.teacher_std = torch.nn.Parameter(data=torch.randn((1,dim,1,1)),requires_grad=False)
         
-        self.q_st_start = params['q_st_start']
-        self.q_st_end = params['q_st_end']
-        self.q_ae_start = params['q_ae_start']
-        self.q_ae_end = params['q_ae_end']
+        self.q_st_start = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
+        self.q_st_end = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
+        self.q_ae_start = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
+        self.q_ae_end = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
 
-        self.lgst_mean = params['lgst_mean']
-        self.lgst_std = params['lgst_std'] if params['lgst_std']>1e-2 else 1
+        self.lgst_mean = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
+        self.lgst_std = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
 
-        self.patch_hist_mean = params['patchhist_mean']
-        self.patch_hist_std = params['patchhist_std'] if params['patchhist_std']>1e-2 else 1
+        self.patch_hist_mean = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
+        self.patch_hist_std = torch.nn.Parameter(data=torch.randn((1))[0],requires_grad=False)
 
-        self.encoder = encoder
-        self.teacher = teacher
-        self.local_st = local_st
-        self.autoencoder = autoencoder
-        self.segmentor = segmentor
-        self.patch_hist_detector = patch_hist_detector
+        self.encoder = timm.create_model('hf_hub:timm/wide_resnet50_2.tv2_in1k'
+                                                ,pretrained=True,
+                                                features_only=True,
+                                                out_indices=[1,2,3])
+        self.teacher = ResNetTeacher(out_dim=512,feat_size=64)
+        self.local_st = LocalStudent(out_dim=512,feat_size=64,padding=True)
+        self.autoencoder = AutoEncoder(out_dim=512,out_size=64)
+        self.segmentor = Segmentor(num_classes=num_classes)
+        self.patch_hist_detector = FixedPatchClassDetector(
+            num_classes=num_classes
+            ,segmap_size=256,
+            use_nahalanobis=True
+        )
 
+    def load_model_params(self,models,params):
+        self.teacher_mean = torch.nn.Parameter(data=params['teacher_mean'],requires_grad=False)
+        self.teacher_std = torch.nn.Parameter(data=params['teacher_std'],requires_grad=False)
+        
+        self.q_st_start = torch.nn.Parameter(data=params['q_st_start'],requires_grad=False)
+        self.q_st_end = torch.nn.Parameter(data=params['q_st_end'],requires_grad=False)
+        self.q_ae_start = torch.nn.Parameter(data=params['q_ae_start'],requires_grad=False)
+        self.q_ae_end = torch.nn.Parameter(data=params['q_ae_end'],requires_grad=False)
+
+        self.lgst_mean = torch.nn.Parameter(data=params['lgst_mean'],requires_grad=False)
+        self.lgst_std = torch.nn.Parameter(data=params['lgst_std'],requires_grad=False)
+        if self.lgst_std < 1e-3:
+            self.lgst_std = torch.nn.Parameter(data=torch.tensor([1])[0],requires_grad=False)
+        
+        self.patch_hist_mean = torch.nn.Parameter(data=params['patchhist_mean'],requires_grad=False)
+        self.patch_hist_std = torch.nn.Parameter(data=params['patchhist_std'],requires_grad=False)
+        if self.patch_hist_std < 1e-3:
+            self.patch_hist_std = torch.nn.Parameter(data=torch.tensor([1])[0],requires_grad=False)
+        
+        self.encoder = models['encoder']
+        self.teacher = models['teacher']
+        self.local_st = models['local_st']
+        self.autoencoder = models['autoencoder']
+        self.segmentor = models['segmentor']
+        self.patch_hist_detector = models['patch_hist_detector']
+        return self
+
+
+    @classmethod
+    def from_pretrained(cls,models,params):
+        num_classes = models['segmentor'].fc2.conv3.out_channels
+        return cls(num_classes=num_classes).load_model_params(models,params)
 
 
     def forward(self, image):
@@ -123,8 +194,8 @@ class CSAD_ONNX(nn.Module):
 
         # Patch Histogram branch
         segmap = self.segmentor(feat)
-        segmap = torch.argmax(segmap,dim=1)
-        patch_hist_score = self.patch_hist_detector.detect_grid(segmap)
+        # segmap = torch.argmax(segmap,dim=1)
+        patch_hist_score = self.patch_hist_detector(segmap)
 
         # LGST branch
         teacher_feat = self.teacher(feat)
@@ -136,19 +207,16 @@ class CSAD_ONNX(nn.Module):
         diff_global = torch.pow(global_feat-ae_global_feat,2).mean(1)
 
         # map normalization
-        if (self.q_st_end - self.q_st_start)>1e-5:
-            diff_local = 0.1 * (diff_local - self.q_st_start) / (self.q_st_end - self.q_st_start)
-        else:
-            diff_local = diff_local - self.q_st_end
-        if (self.q_st_end - self.q_st_start)>1e-5:
-            diff_global = 0.1 * (diff_global - self.q_ae_start) / (self.q_ae_end - self.q_ae_start)
-        else:
-            diff_global = diff_global - self.q_ae_end
+        diff_local = 0.1 * (diff_local - self.q_st_start) / (self.q_st_end - self.q_st_start)
+        diff_global = 0.1 * (diff_global - self.q_ae_start) / (self.q_ae_end - self.q_ae_start)
+
         LGST_score = torch.max(diff_local+diff_global)
 
         # score fusion
-        patch_hist_score = (patch_hist_score-self.patch_hist_mean)/self.patch_hist_std
         LGST_score = (LGST_score-self.lgst_mean)/self.lgst_std
+        patch_hist_score = (patch_hist_score-self.patch_hist_mean)/self.patch_hist_std
+
+
 
         return LGST_score+patch_hist_score
     
@@ -181,22 +249,26 @@ def load_torch_model(category):
         use_nahalanobis=True
     )
     patch_hist_params = np.load(f"./anomaly_score/{category}_patchhist_params.npz")
-    patch_hist_detector.hist_mean = torch.tensor(patch_hist_params['hist_mean'],dtype=torch.float32).cuda()
-    patch_hist_detector.hist_invcov = torch.tensor(patch_hist_params['hist_invcov'],dtype=torch.float32).cuda()
-    patch_hist_detector.patch_hist_mean = torch.tensor(patch_hist_params['patch_hist_mean'],dtype=torch.float32).cuda()
-    patch_hist_detector.patch_hist_invcov = torch.tensor(patch_hist_params['patch_hist_invcov'],dtype=torch.float32).cuda()
+    detector_params = {}
+    detector_params['hist_mean'] = torch.tensor(patch_hist_params['hist_mean'],dtype=torch.float32)
+    detector_params['hist_invcov'] = torch.tensor(patch_hist_params['hist_invcov'],dtype=torch.float32)
+    detector_params['patch_hist_mean'] = torch.tensor(patch_hist_params['patch_hist_mean'],dtype=torch.float32)
+    detector_params['patch_hist_invcov'] = torch.tensor(patch_hist_params['patch_hist_invcov'],dtype=torch.float32)
     hist_val_score = patch_hist_params['hist_val_score']
     q = np.quantile(hist_val_score,0.2)
     p = np.quantile(hist_val_score,0.8)
     hist_val_score = hist_val_score[(hist_val_score>q) & (hist_val_score<p)]
-    patch_hist_detector.hist_val_mean = torch.tensor(np.mean(hist_val_score),dtype=torch.float32).cuda()
-    patch_hist_detector.hist_val_std = torch.tensor(np.std(hist_val_score),dtype=torch.float32).cuda()
+    detector_params['hist_val_mean'] = torch.tensor(np.mean(hist_val_score),dtype=torch.float32)
+    detector_params['hist_val_std'] = torch.tensor(np.std(hist_val_score),dtype=torch.float32)
     patch_hist_val_score = patch_hist_params['patch_hist_val_score']
     q = np.quantile(patch_hist_val_score,0.2)
     p = np.quantile(patch_hist_val_score,0.8)
     patch_hist_val_score = patch_hist_val_score[(patch_hist_val_score>q) & (patch_hist_val_score<p)]
-    patch_hist_detector.patch_hist_val_mean = torch.tensor(np.mean(patch_hist_val_score),dtype=torch.float32).cuda()
-    patch_hist_detector.patch_hist_val_std = torch.tensor(np.std(patch_hist_val_score),dtype=torch.float32).cuda()
+    detector_params['patch_hist_val_mean'] = torch.tensor(np.mean(patch_hist_val_score),dtype=torch.float32)
+    detector_params['patch_hist_val_std'] = torch.tensor(np.std(patch_hist_val_score),dtype=torch.float32)
+    
+    patch_hist_detector.set_params(detector_params)
+
 
 
     lgst_val = np.load(f"./anomaly_score/{category}_LGST_val_score.npy")
@@ -204,14 +276,14 @@ def load_torch_model(category):
     p = np.quantile(lgst_val,0.8)
     lgst_val = lgst_val[(lgst_val>q) & (lgst_val<p)]
     lgst_mean = np.mean(lgst_val)
-    lgst_std = np.std(lgst_val)
+    lgst_std = np.std(lgst_val) if np.std(lgst_val) > 1e-3 else 1
 
     patch_hist_val = np.load(f"./anomaly_score/{category}_patchhist_val_score.npy")
     q = np.quantile(patch_hist_val,0.2)
     p = np.quantile(patch_hist_val,0.8)
     patch_hist_val = patch_hist_val[(patch_hist_val>q) & (patch_hist_val<p)]
     patch_hist_mean = np.mean(patch_hist_val)
-    patch_hist_std = np.std(patch_hist_val)
+    patch_hist_std = np.std(patch_hist_val) if np.std(patch_hist_val) > 1e-3 else 1
 
     params = {
         'teacher_mean':teacher_mean,
@@ -220,62 +292,72 @@ def load_torch_model(category):
         'q_st_end':q_st_end,
         'q_ae_start':q_ae_start,
         'q_ae_end':q_ae_end,
-        'lgst_mean':torch.tensor(lgst_mean,dtype=torch.float32).cuda(),
-        'lgst_std':torch.tensor(lgst_std,dtype=torch.float32).cuda(),
-        'patchhist_mean':torch.tensor(patch_hist_mean,dtype=torch.float32).cuda(),
-        'patchhist_std':torch.tensor(patch_hist_std,dtype=torch.float32).cuda()
+        'lgst_mean':torch.tensor(lgst_mean,dtype=torch.float32),
+        'lgst_std':torch.tensor(lgst_std,dtype=torch.float32),
+        'patchhist_mean':torch.tensor(patch_hist_mean,dtype=torch.float32),
+        'patchhist_std':torch.tensor(patch_hist_std,dtype=torch.float32)
     }
 
-    csad = CSAD_ONNX(
-        encoder=encoder,
-        teacher=teacher,
-        local_st=local_st,
-        autoencoder=autoencoder,
-        segmentor=segmentor,
-        patch_hist_detector=patch_hist_detector,
-        params=params
-    )
+    models = {
+        'encoder':encoder,
+        'teacher':teacher,
+        'local_st':local_st,
+        'autoencoder':autoencoder,
+        'segmentor':segmentor,
+        'patch_hist_detector':patch_hist_detector,
+        'params':params
+    }
+
+    csad = CSAD_ONNX.from_pretrained(models,params)
     return csad
 
 
 def torch_export_model(category):
     csad = load_torch_model(category)
+    csad.eval().cuda()
+
     os.makedirs("./ckpt/pytorch_models", exist_ok=True)
-    torch.save(csad,f"./ckpt/pytorch_models/{category}.pth")
+    torch.save(csad.state_dict(),f"./ckpt/pytorch_models/{category}.pth")
     print(f"Model saved to ./ckpt/pytorch_models/{category}.pth")
 
 def torch2onnx(category):
     import onnx
     model_path = f"./ckpt/pytorch_models/{category}.pth"
-    csad = torch.load(model_path)
+    csad_state_dict = torch.load(model_path)
+    num_classes = csad_state_dict['segmentor.fc2.conv3.weight'].shape[0]
+    csad = CSAD_ONNX(dim=512,num_classes=num_classes)
+    csad.load_state_dict(csad_state_dict)
     csad.cuda().eval()
     print("Model loaded successfully!")
 
-    csad.cuda().eval()
     torch_input = torch.randn(1,3,256,256).cuda()
     os.makedirs("./ckpt/onnx_models", exist_ok=True)
 
     # Export the model
     torch.onnx.export(csad,               # model being run
-                  torch_input,                         # model input (or a tuple for multiple inputs)
-                  f"./ckpt/onnx_models/{category}.onnx",   # where to save the model (can be a file or file-like object)
-                  export_params=True,        # store the trained parameter weights inside the model file
-                  opset_version=13,          # the ONNX version to export the model to
-                #   do_constant_folding=True,  # whether to execute constant folding for optimization
-                  input_names = ['input'],   # the model's input names
-                  output_names = ['output'], # the model's output names
-                  dynamic_axes={'input' : {0 : 'batch_size'},    # variable length axes
-                                'output' : {0 : 'batch_size'}}
-                )
+        torch_input,                         # model input (or a tuple for multiple inputs)
+        f"./ckpt/onnx_models/{category}.onnx",   # where to save the model (can be a file or file-like object)
+        export_params=True,        # store the trained parameter weights inside the model file
+        opset_version=17,          # the ONNX version to export the model to
+        do_constant_folding=True,  # whether to execute constant folding for optimization
+        input_names = ['input'],   # the model's input names
+        output_names = ['output'], # the model's output names
+        dynamic_axes={'input' : {0 : 'batch_size'},    # variable length axes
+                    'output' : {0 : 'batch_size'}}
+    )
 
     
     onnx_model = onnx.load(f"./ckpt/onnx_models/{category}.onnx")
     onnx.checker.check_model(onnx_model)
     print("Model successfully convert to ONNX!")
+    
 
 def inference_torch(category):
     model_path = f"./ckpt/pytorch_models/{category}.pth"
-    csad = torch.load(model_path)
+    csad_state_dict = torch.load(model_path)
+    num_classes = csad_state_dict['segmentor.fc2.conv3.weight'].shape[0]
+    csad = CSAD_ONNX(dim=512,num_classes=num_classes)
+    csad.load_state_dict(csad_state_dict)
     csad.cuda().eval()
     print(f"Load {model_path} successfully!")
     
@@ -468,6 +550,37 @@ def inference_openvino(category):
 
     return (logi_auc*100+stru_auc*100)/2
 
+
+def torch2tflite(category):
+    import ai_edge_torch
+    model_path = f"./ckpt/pytorch_models/{category}.pth"
+    csad_state_dict = torch.load(model_path)
+    num_classes = csad_state_dict['segmentor.fc2.conv3.weight'].shape[0]
+    csad = CSAD_ONNX(dim=512,num_classes=num_classes)
+    csad.load_state_dict(csad_state_dict)
+    csad.cuda().eval()
+    print(f"Load {model_path} successfully!")
+    sample_input = (torch.randn(1,3,256,256).cuda())
+    torch_output = csad(*sample_input)
+    edge_model = ai_edge_torch.convert(csad, sample_input)
+    edge_output = edge_model(*sample_input)
+    if (np.allclose(
+        torch_output.detach().numpy(),
+        edge_output,
+        atol=1e-5,
+        rtol=1e-5,
+    )):
+        print("Inference result with Pytorch and TfLite was within tolerance")
+    else:
+        print("Something wrong with Pytorch --> TfLite")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    os.makedirs(f"{root}/ckpt/tflite_models",exist_ok=True)
+    edge_model.export(f"{root}/ckpt/tflite_models/{category}.tflite")
+    print(f"Model saved to ./ckpt/tflite_models/{category}.tflite")
+
+
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     """
@@ -480,6 +593,9 @@ if __name__ == "__main__":
         Convert ONNX model to OpenVINO model:
             python export_model.py --format openvino
 
+        Convert Pytorch model to TFlite model:
+            python export_model.py --format tflite
+
         Inference Pytorch model:
             python export_model.py --inference_only --format torch
 
@@ -490,7 +606,7 @@ if __name__ == "__main__":
             python export_model.py --inference_only --format openvino
     """
     argparser.add_argument("--inference_only",default=False, action="store_true")
-    argparser.add_argument("--format",default="onnx",choices=["onnx","openvino","torch"])
+    argparser.add_argument("--format",default="onnx",choices=["onnx","openvino","torch","tflite"])
     args = argparser.parse_args()
     categories = ["breakfast_box","juice_bottle","pushpins","screw_bag","splicing_connectors",]#
     aucs = []
@@ -511,5 +627,8 @@ if __name__ == "__main__":
                 onnx2openvino(category)
             elif args.format == "torch":
                 torch_export_model(category)
+            elif args.format == "tflite":
+                torch2tflite(category)
+
     if args.inference_only:
         print("Total Average AUC:",np.mean(aucs))

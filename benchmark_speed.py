@@ -11,6 +11,7 @@ from torch.nn import functional as F
 from models.segmentation.model import Segmentor
 from models.model import LocalStudent, AutoEncoder
 from scipy.spatial.distance import mahalanobis
+from export_model import FixedPatchClassDetector
 
 # without encoder
 class ResNetTeacher(nn.Module):
@@ -32,67 +33,6 @@ class ResNetTeacher(nn.Module):
         concat_feat = nn.AvgPool2d(kernel_size=3, stride=1, padding=1)(concat_feat)
         proj_feat = self.proj(concat_feat)
         return proj_feat
-
-
-
-
-def histogram(label_map,num_classes):
-    hist = torch.zeros(label_map.shape[0],num_classes).cuda()
-    for i in range(1,num_classes+1): # not include background
-        hist[:,i-1] = torch.sum((label_map == i),dim=[1,2])
-    hist = hist / (label_map.shape[1]*label_map.shape[2])
-    return hist 
-
-def patch_histogram(label_map,num_classes):
-    # patch_size = 128
-    a = label_map[:,:128,:128]
-    b = label_map[:,128:,:128]
-    c = label_map[:,:128,128:]
-    d = label_map[:,128:,128:]
-    return torch.concat([histogram(a,num_classes),histogram(b,num_classes),histogram(c,num_classes),histogram(d,num_classes)],dim=1)
-
-class FixedPatchClassDetector():
-    """
-        Optimized version of patch histogram detector for fast speed
-        and support batched input.
-        (Predefined patch sizes and overlap ratios)
-        (not using EMPatches to extract patches)
-    """
-    def __init__(self,num_classes=5,segmap_size=256,use_nahalanobis=False):
-        self.num_classes = num_classes
-        self.segmap_size = segmap_size
-        self.use_nahalanobis = use_nahalanobis
-        self.hist_mean = torch.randn((self.num_classes)).cuda()
-        self.hist_invcov = torch.randn((self.num_classes,self.num_classes)).cuda()
-        self.patch_hist_mean = torch.randn((self.num_classes*4)).cuda()
-        self.patch_hist_invcov = torch.randn((self.num_classes*4,self.num_classes*4)).cuda()
-        self.hist_val_mean = torch.randn((1)).cuda()
-        self.hist_val_std = torch.randn((1)).cuda()
-        self.patch_hist_val_mean = torch.randn((1)).cuda()
-        self.patch_hist_val_std = torch.randn((1)).cuda()
-
-
-
-    def detect_grid(self,segmap):
-        hist = histogram(segmap,self.num_classes)
-        patch_hist = patch_histogram(segmap,self.num_classes)
-
-        diff_hists = []
-        diff_patchhists = []
-        for i in range(segmap.shape[0]):
-            if self.use_nahalanobis:
-                diff_hist = torch.matmul(torch.matmul(hist[i]-self.hist_mean,self.hist_invcov),hist[i]-self.hist_mean)**0.5
-                diff_patchhist = torch.matmul(torch.matmul(patch_hist[i]-self.patch_hist_mean,self.patch_hist_invcov),patch_hist[i]-self.patch_hist_mean)**0.5
-            else:
-                diff_hist = ((hist[i]-self.hist_mean)**2).sum()**0.5
-                diff_patchhist = ((patch_hist[i]-self.patch_hist_mean)**2).sum()**0.5
-            diff_hists.append(diff_hist)
-            diff_patchhists.append(diff_patchhist)
-        diff_hist = torch.stack(diff_hists)
-        diff_patchhist = torch.stack(diff_patchhists)
-        diff_hist = (diff_hist-self.hist_val_mean)/self.hist_val_std
-        diff_patchhist = (diff_patchhist-self.patch_hist_val_mean)/self.patch_hist_val_std
-        return diff_hist+diff_patchhist
 
 
 def benchmark(model,size,num=1000,bs=8):
@@ -134,7 +74,7 @@ if __name__ == "__main__":
         input_size=256
     ).cuda().eval()
 
-    patch_hist = FixedPatchClassDetector(num_classes=5,segmap_size=256)
+    patch_hist = FixedPatchClassDetector(num_classes=5,segmap_size=256,use_nahalanobis=True).cuda()
 
     local_q_start = torch.e
     local_q_end = torch.pi
