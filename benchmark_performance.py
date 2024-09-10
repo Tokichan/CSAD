@@ -29,7 +29,8 @@ def de_normalize(tensor):
 
 def normalize(score,val_score):
     # max normalization
-    score = score/np.max(val_score)
+    if np.max(val_score) != 0:
+        score = score/np.max(val_score)
     return score
 
 def normalize2(score,val_score):
@@ -39,13 +40,15 @@ def normalize2(score,val_score):
     val_score = val_score[(val_score>q) & (val_score<p)]
 
     score = score-np.mean(val_score)
-    score = score/np.std(val_score)
+    if np.std(val_score) != 0:
+        score = score/np.std(val_score)
     return score
 
 def normalize3(score,val_score):
     # mean absolute deviation normalization
     avg_dist = np.mean(np.abs(val_score-np.mean(val_score)))
-    score = score/avg_dist
+    if avg_dist != 0:
+        score = score/avg_dist
     return score
 
 
