@@ -9,11 +9,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 # Grounding DINO
 
-import groundingDINO.datasets.transforms as T
-from groundingDINO.models import build_model
-from groundingDINO.util import box_ops
-from groundingDINO.util.slconfig import SLConfig
-from groundingDINO.util.utils import clean_state_dict, get_phrases_from_posmap
+import groundingdino.datasets.transforms as T
+from groundingdino.models import build_model
+from groundingdino.util import box_ops
+from groundingdino.util.slconfig import SLConfig
+from groundingdino.util.utils import clean_state_dict, get_phrases_from_posmap
 
 # segment anything
 from segment_anything import (

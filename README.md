@@ -5,6 +5,8 @@
 
 This is the official implementation of the paper "CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection" accepted by BMVC 2024.
 
+### (0911) Update: CSAD now supports ONNX, OpenVINO and TFLite!
+
 <img src="./benchmark_speed.svg" width=500>
 
 
@@ -54,9 +56,10 @@ Detection results of MVTec LOCO AD:
 | Source | Total Average AUROC  | 
 |-|-|
 | Paper | 95.3 |   
-| pytorch | 95.506 |
-|ONNX| 95.506 |
-|OpenVINO| 95.508 |
+| pytorch | 95.671 |
+|ONNX| 95.693 |
+|OpenVINO| 95.676 |
+|TFLite|95.687|
 
 ### 1. Evaluate pretrained models
 Download the pretrained Pytorch model from [Google drive](https://drive.google.com/file/d/1ZvzjT62hOqFNkEPAHpREk0mVe7DviXAF/view?usp=sharing), extract files into `ckpt/pytorch_models` and run:
@@ -109,17 +112,32 @@ python export_model.py --format openvino
 ```
 to convert ONNX model to OpenVINO model stored in `ckpt/openvino_models/{category}.bin` and `ckpt/openvino_models/{category}.xml`.
 
-### 5. Evaluate in ONNX or OpenVINO format
+### 5. Convert Pytorch model to TFLite format
+Make sure you have the following files:
+
+```
+ckpt/pytorch_models/{category}.pth
+```
+
+and run
+```
+python export_model.py --format tflite
+```
+to convert Pytorch model to TFLite model stored in `ckpt/tflite_models/{category}.tflite`.
+
+### 6. Evaluate in ONNX or OpenVINO or TFLite format
 After obtaining the ONNX or OpenVINO model, you can evaluate them with
 ```
 python export_model.py --inference_only --format onnx
 or
 python export_model.py --inference_only --format openvino
+or
+python export_model.py --inference_only --format tflite
 ```
 The detection result will show in the cmd.
 
 
-### 6. Alternative way to evaluate model
+### 7. Alternative way to evaluate model
 After training all modules, make sure you have the following files:
 
 ```
