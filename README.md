@@ -6,11 +6,29 @@
 This is the official implementation of the paper "CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection" accepted by BMVC 2024.
 
 ### (0911) Update: CSAD now supports ONNX, OpenVINO and TFLite!
+## Model Architecture
+<img src="./figures/CSAD.png" width=500>
 
-<img src="./benchmark_speed.svg" width=500>
+CSAD consists of two branches: a Patch Histogram branch that detects anomalies using component segmentation and an LGST branch that detects both small and large-scale anomalies.
 
+## Unsupervised Semantic Pseudo-label Generation
+<img src="./figures/unsupervised_label_generation.png" width=450>
 
-## Setup
+Proposed semantic pseudo-label generation that generates semantic pseudo-labels from normal images only using multiple foundation models.
+
+## Patch Histogram
+<img src="./figures/PatchHistogram.png" width=400>
+
+An example illustrating the effectiveness of patch histograms in addressing
+position-related logical anomalies.
+
+## Speed-performance Comparison
+<img src="./figures/benchmark_speed.svg" width=400>
+
+The speed-performance plot on the
+MVTec LOCO AD benchmark. 
+
+## Setup Environment
 We use python==3.10 with pytorch==2.4.1(cuda12.1)
 
 To install HQ-SAM, follow the instruction in https://github.com/SysCV/sam-hq and download the checkpoint into `ckpt/`.
