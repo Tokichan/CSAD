@@ -6,6 +6,7 @@
 This is the official implementation of the paper "CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection" accepted by BMVC 2024.
 
 ### (0911) Update: CSAD now supports ONNX, OpenVINO and TFLite!
+### (0919) Update: CSAD now supports TensorRT!
 ## Model Architecture
 <img src="./figures/CSAD.png" width=500>
 
@@ -78,6 +79,7 @@ Detection results of MVTec LOCO AD:
 |ONNX| 95.693 |
 |OpenVINO| 95.676 |
 |TFLite|95.687|
+|TensorRT|95.671|
 
 ### 1. Evaluate pretrained models
 Download the pretrained Pytorch model from [Google drive](https://drive.google.com/file/d/1ZvzjT62hOqFNkEPAHpREk0mVe7DviXAF/view?usp=sharing), extract files into `ckpt/pytorch_models` and run:
@@ -131,6 +133,7 @@ python export_model.py --format openvino
 to convert ONNX model to OpenVINO model stored in `ckpt/openvino_models/{category}.bin` and `ckpt/openvino_models/{category}.xml`.
 
 ### 5. Convert Pytorch model to TFLite format
+Install ai_edge_torch follow the instructions in [ai_edge_torch](https://github.com/google-ai-edge/ai-edge-torch).</br>
 Make sure you have the following files:
 
 ```
@@ -143,19 +146,43 @@ python export_model.py --format tflite
 ```
 to convert Pytorch model to TFLite model stored in `ckpt/tflite_models/{category}.tflite`.
 
-### 6. Evaluate in ONNX or OpenVINO or TFLite format
-After obtaining the ONNX or OpenVINO model, you can evaluate them with
+### 6. Convert ONNX model to TensorRT format
+Install TensorRT(10.4.0) with cuda version 12.4 follow the instructions in [NVIDIA](https://docs.nvidia.com/deeplearning/tensorrt/install-guide/index.html).</br>
+We will use `trtexec` in the TensorRT to convert the model.<br>
+Make sure you have the following files:
+
+```
+ckpt/onnx_models/{category}.pth
+```
+and run
+```
+python export_model.py --format tensorrt
+```
+to convert Pytorch model to TensorRT model stored in `ckpt/trt_models/{category}.engine`.
+
+
+
+
+### 7. Evaluate in ONNX or OpenVINO or TFLite or TensorRT format
+After obtaining the models, you can evaluate them with
 ```
 python export_model.py --inference_only --format onnx
 or
 python export_model.py --inference_only --format openvino
 or
 python export_model.py --inference_only --format tflite
+or
+python export_model.py --inference_only --format tensorrt
 ```
-The detection result will show in the cmd.
+The detection result will show in the cmd.<br>
+
+Note that 
++ inference of ONNX model requires onnxruntime/onnxruntime-gpu package.
++ inference of TensorRT model requires pycuda package.
 
 
-### 7. Alternative way to evaluate model
+
+### 8. Alternative way to evaluate model
 After training all modules, make sure you have the following files:
 
 ```

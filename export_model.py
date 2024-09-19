@@ -1,6 +1,4 @@
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.onnx
 import timm
 import numpy as np
@@ -9,6 +7,7 @@ from sklearn.metrics import roc_auc_score
 import os
 import tqdm
 import argparse
+import time
 from data_loader import MVTecLOCODataset
 
 def load_torch_model(category):
@@ -167,12 +166,15 @@ def inference_torch(category):
     logi_score = []
     stru_ture = []
     stru_score = []
+    times = []
     for i,sample in tqdm.tqdm(enumerate(test_set), desc="Testing"):
         image = sample['image']
         path = sample['path']
         
         torch_input = image
+        t = time.time()
         out = csad(torch_input)
+        times.append(time.time()-t)
         score = out.item()
         # print(score)
         defect_class = os.path.basename(os.path.dirname(path[0]))
@@ -193,6 +195,7 @@ def inference_torch(category):
     stru_auc = roc_auc_score(y_true=stru_ture, y_score=stru_score)
     
     print(f"Test result: logical auc:{logi_auc*100}, structural auc:{stru_auc*100}")
+    print(f"Average time: {np.mean(times)*1000:.2f}ms")
 
     return (logi_auc*100+stru_auc*100)/2
 
@@ -438,6 +441,105 @@ def inference_tflite(category):
 
     return (logi_auc*100+stru_auc*100)/2
 
+def onnx2trt(category):
+    os.makedirs("./ckpt/trt_models", exist_ok=True)
+    os.system(f"trtexec --onnx=./ckpt/onnx_models/{category}.onnx --saveEngine=./ckpt/trt_models/{category}.engine --optShapes=input:1x3x256x256")
+
+def inference_trt(category):
+    import pycuda.driver as cuda
+    # This import causes pycuda to automatically manage CUDA context creation and cleanup.
+    # DO NOT REMOVE
+    import pycuda.autoinit
+    ########################
+    import tensorrt as trt
+    root = os.path.dirname(os.path.abspath(__file__))
+
+
+    TRT_LOGGER = trt.Logger()
+    engine_file = f"{root}/ckpt/trt_models/{category}.engine"
+    def load_engine(engine_file_path):
+        assert os.path.exists(engine_file_path)
+        print("Reading engine from file {}".format(engine_file_path))
+        with open(engine_file_path, "rb") as f, trt.Runtime(TRT_LOGGER) as runtime:
+            return runtime.deserialize_cuda_engine(f.read())
+        
+    engine = load_engine(engine_file)
+    context = engine.create_execution_context()
+    
+    tensor_name = engine.get_tensor_name(0) # input tensor
+    context.set_input_shape(tensor_name, [1,3,256,256]) # use your input_shape
+    # dummy input and output
+    output = np.empty([1], dtype=np.float32)
+    input_image = np.random.rand(1,3,256,256).astype(np.float32)
+
+    # allocate device memory
+    d_input = cuda.mem_alloc(1 * input_image.nbytes)
+    d_output = cuda.mem_alloc(1 * output.nbytes)
+
+    context.set_tensor_address(engine.get_tensor_name(0), int(d_input)) # input buffer
+    context.set_tensor_address(engine.get_tensor_name(1), int(d_output)) #output buffer
+
+    stream = cuda.Stream()
+        
+    def infer(stream,input_image,output):
+        # transfer input data to device
+        cuda.memcpy_htod_async(d_input, input_image, stream)
+        # execute model
+        context.execute_async_v3(stream_handle=stream.handle)
+        # transfer predictions back
+        cuda.memcpy_dtoh_async(output, d_output, stream)
+        # syncronize threads
+        stream.synchronize()
+        
+        return output
+
+
+    test_set = MVTecLOCODataset(
+            root="./datasets/mvtec_loco_anomaly_detection",
+            image_size=256,
+            phase='test',
+            category=category,
+            to_gpu=False
+        )
+    test_set = DataLoader(test_set, batch_size=1, shuffle=False)
+
+    logi_ture = []
+    logi_score = []
+    stru_ture = []
+    stru_score = []
+    times = []
+
+    for i,sample in tqdm.tqdm(enumerate(test_set), desc="Testing"):
+        image = sample['image']
+        path = sample['path']
+        
+        t = time.time()
+        trt_output = infer(stream,image.numpy(),output)
+        score = trt_output[0]
+        times.append(time.time()-t)
+        defect_class = os.path.basename(os.path.dirname(path[0]))
+        
+        if defect_class == "good":
+            logi_ture.append(0)
+            logi_score.append(score)
+            stru_ture.append(0)
+            stru_score.append(score)
+        elif defect_class == "logical_anomalies":
+            logi_ture.append(1)
+            logi_score.append(score)
+        elif defect_class == "structural_anomalies":
+            stru_ture.append(1)
+            stru_score.append(score)
+
+    logi_auc = roc_auc_score(y_true=logi_ture, y_score=logi_score)
+    stru_auc = roc_auc_score(y_true=stru_ture, y_score=stru_score)
+    
+    print(f"Test result: logical auc:{logi_auc*100}, structural auc:{stru_auc*100}")
+    print(f"Average time: {np.mean(times)*1000:.2f}ms")
+
+    return (logi_auc*100+stru_auc*100)/2
+
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser()
     """
@@ -453,6 +555,9 @@ if __name__ == "__main__":
         Convert Pytorch model to TFLite model:
             python export_model.py --format tflite
 
+        Convert ONNX model to TensorRT model:
+            python export_model.py --format tensorrt
+
         Inference Pytorch model:
             python export_model.py --inference_only --format torch
 
@@ -464,11 +569,14 @@ if __name__ == "__main__":
 
         Inference TFLite model:
             python export_model.py --inference_only --format tflite
+
+        Inference TensorRT model:
+            python export_model.py --inference_only --format tensorrt
     """
     argparser.add_argument("--inference_only",default=False, action="store_true")
-    argparser.add_argument("--format",default="torch",choices=["onnx","openvino","torch","tflite"])
+    argparser.add_argument("--format",default="torch",choices=["onnx","openvino","torch","tflite","tensorrt"])
     args = argparser.parse_args()
-    categories = ["pushpins","breakfast_box","juice_bottle","screw_bag","splicing_connectors",]#
+    categories = ["breakfast_box","juice_bottle","pushpins","screw_bag","splicing_connectors",]#
     aucs = []
     for category in categories:
         if args.inference_only:
@@ -480,6 +588,8 @@ if __name__ == "__main__":
                 auc = inference_torch(category)
             elif args.format == "tflite":
                 auc = inference_tflite(category)
+            elif args.format == "tensorrt":
+                auc = inference_trt(category)
             
             aucs.append(auc)
         else:
@@ -491,6 +601,8 @@ if __name__ == "__main__":
                 torch_export_model(category)
             elif args.format == "tflite":
                 torch2tflite(category)
+            elif args.format == "tensorrt":
+                onnx2trt(category)
 
     if args.inference_only:
         print("Total Average AUC:",np.mean(aucs))
