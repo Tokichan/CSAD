@@ -4,9 +4,9 @@
 
 
 This is the official implementation of the paper "CSAD: Unsupervised Component Segmentation for Logical Anomaly Detection" accepted by BMVC 2024.
-
-### (0911) Update: CSAD now supports ONNX, OpenVINO and TFLite!
 ### (0919) Update: CSAD now supports TensorRT!
+### (0911) Update: CSAD now supports ONNX, OpenVINO and TFLite!
+
 ## Model Architecture
 <img src="./figures/CSAD.png" width=500>
 
