@@ -152,7 +152,7 @@ We will use `trtexec` in the TensorRT to convert the model.<br>
 Make sure you have the following files:
 
 ```
-ckpt/onnx_models/{category}.pth
+ckpt/onnx_models/{category}.onnx
 ```
 and run
 ```
