@@ -30,13 +30,13 @@ The speed-performance plot on the
 MVTec LOCO AD benchmark. 
 
 ## Setup Environment
-We use python==3.10 with pytorch==2.4.1(cuda12.1)
+We use python==3.10 with pytorch==2.4.1(cuda12.4)
 
-To install HQ-SAM, follow the instruction in https://github.com/SysCV/sam-hq and download the checkpoint into `ckpt/`.
+To install HQ-SAM, follow the instructions at https://github.com/SysCV/sam-hq and download the checkpoint into `ckpt/`.
 
-To install Grounding-dino, follow the instruction in https://github.com/IDEA-Research/GroundingDINO and download the checkpoint into `ckpt/`.
+To install Grounding-dino, follow the instructions at https://github.com/IDEA-Research/GroundingDINO and download the checkpoint into `ckpt/`.
 
-To install other denpendency:
+To install other dependencies:
 ```
 pip install -r requirements.txt
 ```
@@ -45,9 +45,9 @@ pip install -r requirements.txt
 Download the [MVTec LOCO AD](https://www.mvtec.com/company/research/datasets/mvtec-loco) dataset to the `datasets/`, result should be like `datasets/mvtec_loco_anomaly_detection/{category}` for each category.
 
 ## Semantic Pseudo-label Generation
-Download the generated semantic pseudo-label maps from [GoogleDrive](https://drive.google.com/file/d/16C2C_Zitl04lnb07giXI30X0HK2TPKDA/view?usp=sharing) and extract into `datasets/`.
+Download the generated semantic pseudo-label maps from [GoogleDrive](https://drive.google.com/file/d/16C2C_Zitl04lnb07giXI30X0HK2TPKDA/view?usp=sharing) and extract them into `datasets/`.
 
-Or you can generate by runing 
+Or you can generate them by running 
 ```
 python pseudo_label.py
 ```
@@ -59,7 +59,7 @@ Run
 ```
 train_segmentor.py
 ```
-and segmentation result of the test set is stored in `datasets/masks/<category>/test_seg_output`. Model will be saved in `ckpt/segmentor_{category}_{resolution}.pth`.
+and the segmentation result of the test set is stored in `datasets/masks/<category>/test_seg_output`. The model will be saved in `ckpt/segmentor_{category}_{resolution}.pth`.
 Anomaly scores will be saved in `anomaly_score/{category}_patchhist_logi_score.npy`, `anomaly_score/{category}_patchhist_struc_score.npy` and `anomaly_score/{category}_patchhist_val_score.npy`.
 
 ## Training the LGST
@@ -104,7 +104,7 @@ and run
 ```
 python export_model.py --format torch
 ```
-to convert all module into a single Pytorch model stored in `ckpt/pytorch_models/{category}.pth`.
+to convert all modules into a single Pytorch model stored in `ckpt/pytorch_models/{category}.pth`.
 
 ### 3. Convert Pytorch model to ONNX format
 Make sure you have the following files:
@@ -163,7 +163,7 @@ to convert Pytorch model to TensorRT model stored in `ckpt/trt_models/{category}
 
 
 
-### 7. Evaluate in ONNX or OpenVINO or TFLite or TensorRT format
+### 7. Evaluate in ONNX, OpenVINO, TFLite, or TensorRT format
 After obtaining the models, you can evaluate them with
 ```
 python export_model.py --inference_only --format onnx
@@ -182,7 +182,7 @@ Note that
 
 
 
-### 8. Alternative way to evaluate model
+### 8. An alternative way to evaluate the model
 After training all modules, make sure you have the following files:
 
 ```
@@ -198,10 +198,10 @@ and run
 ```
 python benchmark_performance.py
 ```
-and the test results are stored in `score_combine_result.txt`, given in seperated or combined setting.
+and the test results are stored in `score_combine_result.txt`, given in separate or combined settings.
 
 ### Notes
-1. Similar to EfficientAD, we enable padding in both local and global students while disabling them in the speed testing section, for both settings produce similar detection result.
+1. Similar to EfficientAD, we enable padding in both local and global students while disabling them in the speed testing section, for both settings produce similar detection results.
 
 # Acknowledgments
 We adopt some of the code from [EfficientAD](https://github.com/nelson1425/EfficientAD/tree/main), [anomalib](https://github.com/openvinotoolkit/anomalib) and [Grounded-SAM](https://github.com/IDEA-Research/Grounded-Segment-Anything/tree/main), thanks for their great work.
